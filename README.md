@@ -4,7 +4,7 @@ SaaS that turns a vendor's solution materials into an Ideal Customer Profile (IC
 rubric and scores prospects against it.
 
 - **Light (Tier 1)** — LLM-only scoring.
-- **Deep (Tier 2)** — deterministic scoring from official enrichment APIs, plus
+- **Deep (Tier 2)** — deterministic scoring from Apollo enrichment, plus
   **compliant** speculative data capture (Section 8) for future pattern mining.
 
 ## Architecture
@@ -23,11 +23,12 @@ app/
     llm                OpenRouter client (rubric gen + Tier 1 scoring)
     rubric_generation  ICP rubric from corpus
     scoring            Tier 1 (LLM) + Tier 2 (deterministic) + colour mapping
-    enrichment         Clearbit / BuiltWith adapters + signal resolution
+    apollo             Apollo.io client (org enrich + departmental headcounts)
+    enrichment         Tier 2 signal resolution from Apollo data
     speculative/
-      site_scraper       first-party site: roles by dept+seniority, dates, pain language
+      site_scraper       first-party site (Firecrawl or httpx): roles, dates, pain language
       dns_signals        SPF / DMARC policy / MX provider / security.txt (public DNS)
-      api_sources        firmographics / news / funding via licensed APIs
+      api_sources        firmographics+funding via Apollo, news via Serper
       derived            ratios + absence flags + 'why now' triggers (pure, tested)
       capture            assembles speculative_data (see SCHEMA.md / COMPLIANCE.md)
   services/
@@ -51,8 +52,9 @@ GDPR/CCPA exposure. Instead we keep the same goal and JSONB shape via:
 1. **First-party site capture** (`services/speculative/site_scraper.py`): fetches
    only the company's *own* site, honors robots.txt, single honest User-Agent,
    rate-limited, page-capped, fault-tolerant.
-2. **Licensed/official APIs** (`services/speculative/api_sources.py`): LinkedIn-style
-   firmographics, news, and funding via contracted APIs — each gated on its key.
+2. **Licensed APIs** (`services/speculative/api_sources.py`): firmographics, departmental
+   headcounts and funding via **Apollo**; news via **Serper**. Counts only — no individuals
+   stored. Each gated on its key.
 
 See `app/services/speculative/COMPLIANCE.md` for the full rationale.
 
@@ -143,4 +145,3 @@ Scaffold = runnable skeleton. Stubbed for you to flesh out: real document storag
 (S3/Railway volume), richer `resolve_signals` mapping, Stripe checkout + tier
 gating in the webhook, the dashboard frontend (Section 10), and the pattern-mining
 analytics endpoint (Section 9).
-# DRiX-ICP

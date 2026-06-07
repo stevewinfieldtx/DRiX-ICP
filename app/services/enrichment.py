@@ -1,68 +1,37 @@
-"""Tier 2 enrichment via OFFICIAL APIs only (Clearbit, BuiltWith).
+"""Tier 2 enrichment via Apollo.io (licensed B2B data).
 
-Each adapter returns a dict of raw data; resolve_signals() maps raw data to
-rubric signal points. All adapters degrade gracefully (return {}) when the
-relevant API key is not configured, so the scaffold runs offline.
+enrich() collects raw Apollo payloads; resolve_signals() maps them to rubric
+signal points. Degrades gracefully to {} when no Apollo key is configured.
 """
-import httpx
-
-from app.core.config import settings
-
-
-async def clearbit_company(domain: str) -> dict:
-    if not settings.clearbit_api_key or not domain:
-        return {}
-    url = f"https://company.clearbit.com/v2/companies/find?domain={domain}"
-    headers = {"Authorization": f"Bearer {settings.clearbit_api_key}"}
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(url, headers=headers)
-        if resp.status_code != 200:
-            return {}
-        return resp.json()
-
-
-async def builtwith(domain: str) -> dict:
-    if not settings.builtwith_api_key or not domain:
-        return {}
-    url = (
-        "https://api.builtwith.com/v21/api.json"
-        f"?KEY={settings.builtwith_api_key}&LOOKUP={domain}"
-    )
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(url)
-        if resp.status_code != 200:
-            return {}
-        return resp.json()
+from app.services import apollo
 
 
 async def enrich(domain: str) -> dict:
-    """Collect raw enrichment payloads keyed by provider."""
-    return {
-        "clearbit": await clearbit_company(domain),
-        "builtwith": await builtwith(domain),
-    }
+    """Collect raw enrichment payloads keyed by source."""
+    org = await apollo.org_enrich(domain)
+    return {"apollo_org": org}
 
 
 def resolve_signals(rubric: dict, enriched: dict) -> dict:
-    """Map raw enrichment data -> {signal_key: points} per rubric weights.
+    """Map raw Apollo data -> {signal_key: points} per rubric weights.
 
-    This is a deterministic, rules-based mapping. The stub awards a signal's
-    full weight when data is present and matches; extend per your real rubric.
+    Deterministic, rules-based. Awards a signal's full weight when the relevant
+    data is present (extend the matching logic for your real rubric).
     """
-    signals: dict[str, float] = {}
-    clearbit = enriched.get("clearbit") or {}
-    metrics = clearbit.get("metrics") or {}
+    org = (enriched or {}).get("apollo_org") or {}
+    employees = org.get("estimated_num_employees")
+    industry = org.get("industry")
+    technologies = org.get("technology_names") or org.get("technologies") or []
 
+    signals: dict[str, float] = {}
     for sig in rubric.get("signals", []):
         key, weight = sig.get("key"), float(sig.get("weight", 0))
         if key == "employee_count":
-            emp = metrics.get("employees")
-            signals[key] = weight if emp else 0.0
+            signals[key] = weight if employees else 0.0
         elif key == "industry":
-            cat = (clearbit.get("category") or {}).get("industry")
-            signals[key] = weight if cat else 0.0
+            signals[key] = weight if industry else 0.0
         elif key == "tech_stack":
-            signals[key] = weight if enriched.get("builtwith") else 0.0
+            signals[key] = weight if technologies else 0.0
         else:
             signals[key] = 0.0
     return signals

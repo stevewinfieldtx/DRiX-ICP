@@ -40,7 +40,7 @@
   },
 
   "news":    [{"headline": "...", "date": "2026-05-12", "source": "TechCrunch"}],
-  "funding": { /* Crunchbase official API payload */ },
+  "funding": {"total_funding": 20000000, "latest_funding_stage": "Series B", "latest_funding_round_date": "2026-05-12"},
 
   "derived": {
     "ratios": {

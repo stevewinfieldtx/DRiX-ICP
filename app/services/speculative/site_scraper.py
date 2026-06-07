@@ -60,7 +60,24 @@ _DATE_RE = re.compile(
 )
 
 
-async def _fetch(url: str) -> str | None:
+async def _fetch_firecrawl(url: str) -> str | None:
+    """Managed scrape via Firecrawl (renders JS, returns clean HTML)."""
+    try:
+        async with httpx.AsyncClient(timeout=40) as client:
+            resp = await client.post(
+                "https://api.firecrawl.dev/v1/scrape",
+                json={"url": url, "formats": ["html"], "onlyMainContent": False},
+                headers={"Authorization": f"Bearer {settings.firecrawl_api_key}"},
+            )
+        if resp.status_code == 200:
+            return (resp.json().get("data") or {}).get("html")
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+async def _fetch_httpx(url: str) -> str | None:
+    """Direct, polite first-party fetch: robots-aware, rate-limited, honest UA."""
     if not await robots.allowed(url):
         return None
     await robots.polite_delay(url)
@@ -75,6 +92,15 @@ async def _fetch(url: str) -> str | None:
     except Exception:  # noqa: BLE001
         return None
     return None
+
+
+async def _fetch(url: str) -> str | None:
+    """Prefer Firecrawl when configured (handles JS-rendered sites); else httpx."""
+    if settings.firecrawl_api_key:
+        html = await _fetch_firecrawl(url)
+        if html:
+            return html
+    return await _fetch_httpx(url)
 
 
 def _norm(domain: str) -> str:

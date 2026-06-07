@@ -42,7 +42,7 @@ async def capture(company_name: str, domain: str | None) -> tuple[dict, Speculat
     # key kept as 'linkedin' for schema continuity; sourced via LICENSED api.
     await _try("linkedin", api_sources.firmographics(domain), None)
     await _try("news", api_sources.news(company_name), [])
-    await _try("funding", api_sources.funding(company_name), None)
+    await _try("funding", api_sources.funding(domain), None)
 
     # derived metrics are local/pure; never count toward source errors
     try:
